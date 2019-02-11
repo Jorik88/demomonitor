@@ -28,6 +28,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.projectlombok:lombok'
+    compile group: 'com.fasterxml.jackson.dataformat', name: 'jackson-dataformat-csv', version: '2.9.8'
+    compile group: 'org.apache.commons', name: 'commons-lang3', version: '3.8.1'
     compile group: 'javax.mail', name: 'mail', version: '1.4.7'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }

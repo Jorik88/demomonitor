@@ -1,32 +1,48 @@
 package com.example.alex.service;
 
+import com.example.alex.configuration.MailConfiguration;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import javax.mail.*;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeMultipart;
-import java.io.FileOutputStream;
-import java.io.InputStream;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
+@Service
+@Slf4j
 public class MailBean {
 
-    private Properties getServerProperties(String protocol, String host, String port) {
+    private MailConfiguration config;
+    private List<ReportService> services;
+
+    @Autowired
+    public MailBean(MailConfiguration mailConfiguration, List<ReportService> services) {
+        this.config = mailConfiguration;
+        this.services = services;
+    }
+
+    private Properties getServerProperties() {
         Properties properties = new Properties();
-        properties.put(String.format("mail.%s.host", protocol), host);
-        properties.put(String.format("mail.%s.port", protocol), port);
-        properties.setProperty(String.format("mail.%s.socketFactory.class", protocol), "javax.net.ssl.SSLSocketFactory");
-        properties.setProperty(String.format("mail.%s.socketFactory.fallback", protocol), "false");
-        properties.setProperty(String.format("mail.%s.socketFactory.port", protocol), String.valueOf(port));
+        properties.put(String.format("mail.%s.host", config.getProtocol()), config.getHost());
+        properties.put(String.format("mail.%s.port", config.getProtocol()), config.getPort());
+        properties.setProperty(String.format("mail.%s.socketFactory.class", config.getProtocol()), "javax.net.ssl.SSLSocketFactory");
+        properties.setProperty(String.format("mail.%s.socketFactory.fallback", config.getProtocol()), "false");
+        properties.setProperty(String.format("mail.%s.socketFactory.port", config.getProtocol()), String.valueOf(config.getPort()));
 
         return properties;
     }
 
-    public void getNewEmails(String protocol, String host, String port, String userName, String password) {
-        Properties properties = getServerProperties(protocol, host, port);
+    public void getNewEmails() {
+        Properties properties = getServerProperties();
         Session session = Session.getDefaultInstance(properties);
 
         try {
-            Store store = session.getStore(protocol);
-            store.connect(userName, password);
+            Store store = session.getStore(config.getProtocol());
+            store.connect(config.getUsername(), config.getPassword());
 
             Folder inbox = store.getFolder("INBOX");
             inbox.open(Folder.READ_WRITE);
@@ -46,21 +62,11 @@ public class MailBean {
                     try {
                         MimeMultipart content = (MimeMultipart) message.getContent();
                         BodyPart bodyPart = content.getBodyPart(1);
-                        String destFilePath = "./" + bodyPart.getFileName();
-
-                        FileOutputStream output = new FileOutputStream(destFilePath);
-
-                        InputStream input = bodyPart.getInputStream();
-
-                        byte[] buffer = new byte[4096];
-
-                        int byteRead;
-
-                        while ((byteRead = input.read(buffer)) != -1) {
-                            output.write(buffer, 0, byteRead);
+                        for (ReportService service : services) {
+                            if (fromAddresses[0].toString().contains(service.getPaymentSystemName())) {
+                                service.processReport(bodyPart, message.getSubject());
+                            }
                         }
-                        output.close();
-                        System.out.println(message.getContent().toString());
                     } catch (Exception ex) {
                         System.out.println("Error reading content!!");
                         ex.printStackTrace();
@@ -72,7 +78,7 @@ public class MailBean {
             inbox.close(false);
             store.close();
         } catch (NoSuchProviderException ex) {
-            System.out.println("No provider for protocol: " + protocol);
+            System.out.println("No provider for protocol: " + config.getProtocol());
             ex.printStackTrace();
         } catch (MessagingException ex) {
             System.out.println("Could not connect to the message store");
